@@ -49,14 +49,26 @@ void hash_table_init(Hash_Table *hash_table, size_t initial_size) {
 }
 
 void hash_table_free(Hash_Table *hash_table) {
+
+	for(size_t idx = 0; idx < hash_table->T1->table_size; idx++) {
+		if(hash_table->T1->table_occupied[idx] == true) {
+			free(hash_table->T1->table_data[idx]);
+		}
+	}
 	free(hash_table->T1->table_data);
 	free(hash_table->T1->table_occupied);
 	free(hash_table->T1);
+
+	for(size_t idx = 0; idx < hash_table->T2->table_size; idx++) {
+		if(hash_table->T2->table_occupied[idx] == true) {
+			free(hash_table->T2->table_data[idx]);
+		}
+	}
 	free(hash_table->T2->table_data);
 	free(hash_table->T2->table_occupied);
 	free(hash_table->T2);
-	printf("Table freed.\n");
 
+	printf("Table freed.\n");
 	return;
 }
 
@@ -158,6 +170,7 @@ void hash_table_insert(Hash_Table *hash_table, char *input) {
 
 	hash_table_free(hash_table);
 	*hash_table = *new_table;
+	free(new_table);
 	hash_table_insert(hash_table, data);
 }
 
@@ -172,11 +185,13 @@ void hash_table_remove(Hash_Table *hash_table, char *data) {
 		hash_table->T1->table_occupied[idx] = false;
 	 	// printf("\" %s \" deleted from T1[%u]\n", hash_table->T1->table_data[idx], idx);
 		free(hash_table->T1->table_data[idx]);
+		hash_table->T1->table_data[idx] = NULL;
 	}
 	else if (found == 2) {
 		hash_table->T2->table_occupied[idx] = false;
 	 	// printf("\" %s \" deleted from T2[%u]\n", hash_table->T2->table_data[idx], idx);
 		free(hash_table->T2->table_data[idx]);
+		hash_table->T2->table_data[idx] = NULL;
 	}
 	return;
 }
@@ -199,6 +214,8 @@ int main() {
 
 	Hash_Table htable = {0};
 	hash_table_init(&htable, 3);
+
+	hash_table_insert(&htable, (char *) "Hello, world!");
 
 	hash_table_display(&htable);
 

@@ -1,2 +1,7 @@
+all:	main normal
+
 main:
-	gcc src/main.c -o build/main -ggdb
+	nvcc src/main.cu -o ./build/main
+
+normal:
+	gcc src/main.c -o build/main_cpu -ggdb
