@@ -1,0 +1,14 @@
+#+TITLE: Cuckoo Hashing
+#+OPTIONS: toc:2
+
+* Cuckoo Hashing
+Uses two hash tables with two hashing functions to ensure O(1) worst case lookup time.
+
+* Building
+Requires gcc.
+Use the Makefile with the make command to build.
+
+* Resources
+- [[https://xcancel.com/tsoding/status/2027285861557997897][Tsoding's tweet]]
+- [[http://www.cse.yorku.ca/~oz/hash.html][Hash functions]]
+- [[https://en.wikipedia.org/wiki/Cuckoo_hashing][Cuckoo hashing]]
