@@ -1,225 +1,41 @@
-#include <stdio.h>
-#include <stdbool.h>
-#include <string.h>
-#include <stdlib.h>
-#include <stdint.h>
+/*
 
-#define MAX_TIMES 8
+Here I introduce the method of using org-mode inside the comments
+and making the code itself cointain the progress tracker.
+Subramanya J [02-03-2026 Mon]
 
-typedef struct regular_table {
-	uint32_t table_size;
-	char **table_data;
-	bool *table_occupied;
-} Regular_Table;
+* Structure [0%]
+** TODO The table is divided into a fixed number of buckets.
+** TODO Each bucket stores a pointer to the head of a linked list of structures (Cuckoo Nodes).
+** TODO Each Cuckoo Node has a small fixed capacity array.
+** TODO We need : an array of key slots, an occupancy structure, and a pointer to next.
+** TODO The node capacity is fixed at compile time.
+** TODO Define a small set of hash functions H to select candidate positions inside a node.
+ 
+* Lookup [%]
+** TODO Lookup begins by computing the bucket index using the bucket hash function h_B(key).
+** TODO The algorithm then walks the linked list of Cuckoo Nodes in that bucket.
+** TODO For each node encountered, it computes the k candidate slot indices using the functions in H and checks only those positions.
+** TODO If any slot is occupied and the stored key matches, the lookup succeeds immediately.
+** TODO If none match, the algorithm advances to the next node in the chain.
+** TODO If the chain ends, the key is not present.
 
-typedef struct hash_table {
-	Regular_Table *T1; /* djb2 hashes */
-	Regular_Table *T2; /* sdbm hashes */
-} Hash_Table;
+* Insertion [%]
+** TODO Insertion starts by hashing the key to its bucket and examining the head node.
+** TODO Within a node, the algorithm performs bounded cuckoo insertion.
+** TODO It first checks the k candidate positions for an empty slot; if one exists, the key is placed there and the operation finishes.
+** TODO If all candidate slots are occupied, the algorithm evicts one of the resident keys using cuckoo swap, inserts the new key in that position, and then attempts to reinsert the evicted key using its alternate positions.
+** TODO This eviction loop is bounded by a small maximum number of iterations.
+** TODO If the loop eventually finds space, insertion succeeds within the same node.
+** TODO On failure, if no next node exists, a new Cuckoo Node is allocated and linked to the chain.
+** TODO The insertion process then repeats in that node.
 
-uint32_t hash_sdbm(const char *data, uint32_t table_size) {
-	uint32_t hval = 0;
-	int c;
-	while ((c = *data++)) {
-		hval = (hval << 16) + (hval << 6) - hval + c;
-	}
-	return hval % table_size;
-}
+* Deletion [0%]
+** TODO The algorithm performs the lookup procedure to find the key.
+** TODO If found, it marks the corresponding slot in the node as unoccupied.
 
-uint32_t hash_djb2(const char *data, uint32_t table_size) {
-	uint32_t hval = 5381u;
-	int c;
-	while ((c = *data++)) {
-		hval = ((hval << 5) + hval) + c;
-	}
-	return hval % table_size;
-}
-
-void regular_table_init(Regular_Table *regular_table, size_t initial_size) {
-	regular_table->table_size = initial_size;
-	regular_table->table_data = (char **) calloc(initial_size, sizeof(char *));
-	regular_table->table_occupied = (bool *) calloc(initial_size, sizeof(bool));
-}
-
-void hash_table_init(Hash_Table *hash_table, size_t initial_size) {
-	hash_table->T1 = (Regular_Table *) calloc(1, sizeof(Regular_Table));
-	hash_table->T2 = (Regular_Table *) calloc(1, sizeof(Regular_Table));
-	regular_table_init(hash_table->T1, initial_size);
-	regular_table_init(hash_table->T2, initial_size);
-}
-
-void hash_table_free(Hash_Table *hash_table) {
-
-	for(size_t idx = 0; idx < hash_table->T1->table_size; idx++) {
-		if(hash_table->T1->table_occupied[idx] == true) {
-			free(hash_table->T1->table_data[idx]);
-		}
-	}
-	free(hash_table->T1->table_data);
-	free(hash_table->T1->table_occupied);
-	free(hash_table->T1);
-
-	for(size_t idx = 0; idx < hash_table->T2->table_size; idx++) {
-		if(hash_table->T2->table_occupied[idx] == true) {
-			free(hash_table->T2->table_data[idx]);
-		}
-	}
-	free(hash_table->T2->table_data);
-	free(hash_table->T2->table_occupied);
-	free(hash_table->T2);
-
-	printf("Table freed.\n");
-	return;
-}
-
-uint32_t hash_table_lookup(Hash_Table *hash_table, char *data, uint8_t *found) {
-	uint32_t idx = hash_djb2(data, hash_table->T1->table_size);
-	if ( hash_table->T1->table_occupied[idx] &&
-		 !strcmp(data, hash_table->T1->table_data[idx])) {
-	 	// printf("\" %s \" present at T1[%u]\n", hash_table->T1->table_data[idx], idx);
-		*found = 1;
-	 	return idx;
-	}
-
-	idx = hash_sdbm(data, hash_table->T2->table_size);
-	if ( hash_table->T2->table_occupied[idx] &&
-		 !strcmp(data, hash_table->T2->table_data[idx])) {
-	 	// printf("\" %s \" present at T2[%u]\n", hash_table->T2->table_data[idx], idx);
-		*found = 2;
-	 	return idx;
-	}
-
-	// printf("\"%s\" is not present in the hash table.\n", data);
-	*found = 0;
-	return 0;
-}
-
-void hash_table_search(Hash_Table *hash_table, char *data) {
-	uint8_t found_buffer;
-	uint32_t idx = hash_table_lookup(hash_table, data, &found_buffer);
-	if (found_buffer == 0) {
-		// printf("\"%s\" not in the table.\n", data);
-		return;
-	}
-	// printf("\"%s\" found at T%u[%u].\n", data, found_buffer, idx);
-	return;
-}
-
-void hash_table_insert(Hash_Table *hash_table, char *input) {
-	uint8_t found;
-	char *data = strdup(input);
-
-	uint32_t idx = hash_table_lookup(hash_table, data, &found);
-	if(found != 0) { free(data); return; } /* Data already exists */
-
-	char *swap_buffer;
-	for(int i = 0; i < MAX_TIMES; i++) {
-
-		idx = hash_djb2(data, hash_table->T1->table_size);
-		if (hash_table->T1->table_occupied[idx] == false) {
-
-			hash_table->T1->table_occupied[idx] = true;
-			hash_table->T1->table_data[idx] = (char *) calloc(sizeof(char), 1 + strlen(data));
-
-			strcpy(hash_table->T1->table_data[idx], data);
-			// printf("\"%s\" inserted at T1[%u].\n", data, idx);
-			free(data);
-			return;
-		}
-
-		swap_buffer = hash_table->T1->table_data[idx];
-		hash_table->T1->table_data[idx] = data;
-		data = swap_buffer;
-		// printf("\t\"%s\" inserted at T1[%u].\n", hash_table->T1->table_data[idx], idx);
-
-		idx = hash_sdbm(data, hash_table->T2->table_size);
-		if (hash_table->T2->table_occupied[idx] == false) {
-
-			hash_table->T2->table_occupied[idx] = true;
-			hash_table->T2->table_data[idx] = (char *) calloc(sizeof(char), 1 + strlen(data));
-
-			strcpy(hash_table->T2->table_data[idx], data);
-			// printf("\"%s\" inserted at T2[%u].\n", data, idx);
-			free(data);
-			return;
-		}
-
-		swap_buffer = hash_table->T2->table_data[idx];
-		hash_table->T2->table_data[idx] = data;
-		data = swap_buffer;
-		// printf("\t\"%s\" inserted at T1[%u].\n", hash_table->T2->table_data[idx], idx);
-
-	}
-
-	// rehash();
-	size_t new_size = ((hash_table->T1->table_size - 1) << 1) + 1;
-	Hash_Table *new_table = (Hash_Table *) calloc(1, sizeof(Hash_Table));
-	hash_table_init(new_table, new_size);
-	printf("Reallocation to table with size %zu.\n", new_size);
-
-	for(size_t idx = 0; idx < hash_table->T1->table_size; idx++) {
-		if (hash_table->T1->table_occupied[idx]) {
-			hash_table_insert(new_table, hash_table->T1->table_data[idx]);
-		}
-	}
-	for(size_t idx = 0; idx < hash_table->T2->table_size; idx++) {
-		if (hash_table->T2->table_occupied[idx]) {
-			hash_table_insert(new_table, hash_table->T2->table_data[idx]);
-		}
-	}
-
-	hash_table_free(hash_table);
-	*hash_table = *new_table;
-	free(new_table);
-	hash_table_insert(hash_table, data);
-}
-
-void hash_table_remove(Hash_Table *hash_table, char *data) {
-	uint8_t found;
-	uint32_t idx = hash_table_lookup(hash_table, data, &found);
-	if (found == 0) {
-		return;
-	}
-
-	if (found == 1) {
-		hash_table->T1->table_occupied[idx] = false;
-	 	// printf("\" %s \" deleted from T1[%u]\n", hash_table->T1->table_data[idx], idx);
-		free(hash_table->T1->table_data[idx]);
-		hash_table->T1->table_data[idx] = NULL;
-	}
-	else if (found == 2) {
-		hash_table->T2->table_occupied[idx] = false;
-	 	// printf("\" %s \" deleted from T2[%u]\n", hash_table->T2->table_data[idx], idx);
-		free(hash_table->T2->table_data[idx]);
-		hash_table->T2->table_data[idx] = NULL;
-	}
-	return;
-}
-
-void hash_table_display(Hash_Table *hash_table) {
-	for(size_t idx = 0; idx < hash_table->T1->table_size; idx++) {
-		if(hash_table->T1->table_occupied[idx] == true) {
-			printf("T1[%zu] : \"%s\"\n", idx, hash_table->T1->table_data[idx]);
-		}
-	}
-	printf("\n");
-	for(size_t idx = 0; idx < hash_table->T2->table_size; idx++) {
-		if(hash_table->T2->table_occupied[idx] == true) {
-			printf("T2[%zu] : \"%s\"\n", idx, hash_table->T2->table_data[idx]);
-		}
-	}
-}
+*/
 
 int main() {
-
-	Hash_Table htable = {0};
-	hash_table_init(&htable, 3);
-
-	hash_table_insert(&htable, (char *) "Hello, world!");
-
-	hash_table_display(&htable);
-
-	hash_table_free(&htable);
-
 	return 0;
 }

@@ -1,4 +1,4 @@
-all:	main normal
+all:	main
 
 main:
 	nvcc src/main.cu -o ./build/main
